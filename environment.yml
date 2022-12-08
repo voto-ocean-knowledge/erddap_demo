@@ -10,3 +10,4 @@ dependencies:
     - cmocean
     - jupyterlab_widgets
     - ipywidgets
+    - tqdm
