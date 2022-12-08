@@ -1,0 +1,12 @@
+name: erddapdemo
+channels:
+  - conda-forge
+dependencies:
+    - argopy
+    - jupyterlab
+    - matplotlib
+    - xarray
+    - cartopy
+    - cmocean
+    - jupyterlab_widgets
+    - ipywidgets
