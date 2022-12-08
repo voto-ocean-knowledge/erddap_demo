@@ -5,6 +5,7 @@ import pathlib
 import xarray as xr
 import pandas as pd
 from erddapy import ERDDAP
+from tqdm.notebook import tqdm
 from argopy import DataFetcher as ArgoDataFetcher
 
 
@@ -36,7 +37,7 @@ def find_glider_datasets(nrt_only=True):
     return datasets.values
 
 
-def download_glider_dataset(dataset_ids, variables=(), nrt_only=False, delayed_only=False, cache_datasets=True):
+def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=False, delayed_only=False, cache_datasets=True):
     """
     Download datasets from the VOTO server using a supplied list of dataset IDs.
     dataset_ids: list of datasetIDs present on the VOTO ERDDAP
@@ -65,10 +66,12 @@ def download_glider_dataset(dataset_ids, variables=(), nrt_only=False, delayed_o
     # Specify variables of interest if supplied
     if variables:
         e.variables = variables
+    if constraints:
+        e.constraints = constraints
 
     # Download each dataset as xarray
     glider_datasets = {}
-    for ds_name in ids_to_download:
+    for ds_name in tqdm(ids_to_download):
         if cache_datasets and "delayed" in ds_name:
             cache_dir = pathlib.Path('voto_erddap_data_cache')
             if not cache_dir.exists():
@@ -81,7 +84,11 @@ def download_glider_dataset(dataset_ids, variables=(), nrt_only=False, delayed_o
             else:
                 print(f"Downloading {ds_name}")
                 e.dataset_id = ds_name
-                ds = e.to_xarray()
+                try:
+                    ds = e.to_xarray()
+                except:
+                    print(f"No matching data for {ds_name}")
+                    continue
                 if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
                     ds = ds.drop_dims("timeseries")
                 glider_datasets[ds_name] = ds
@@ -90,7 +97,11 @@ def download_glider_dataset(dataset_ids, variables=(), nrt_only=False, delayed_o
         else:
             print(f"Downloading {ds_name}")
             e.dataset_id = ds_name
-            ds = e.to_xarray()
+            try:
+                ds = e.to_xarray()
+            except:
+                print(f"No matching data for {ds_name}")
+                continue
             if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
                 ds = ds.drop_dims("timeseries")
             glider_datasets[ds_name] = ds
