@@ -2,3 +2,4 @@
 __pycache__
 voto_erddap_data_cache
 figures
+*.csv
