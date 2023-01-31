@@ -37,7 +37,8 @@ def find_glider_datasets(nrt_only=True):
     return datasets.values
 
 
-def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=False, delayed_only=False, cache_datasets=True):
+def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=False, delayed_only=False, cache_datasets=True,
+                            adcp=False):
     """
     Download datasets from the VOTO server using a supplied list of dataset IDs.
     dataset_ids: list of datasetIDs present on the VOTO ERDDAP
@@ -91,7 +92,11 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                     continue
                 if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
                     ds = ds.drop_dims("timeseries")
+                if "obs" in list(ds.dims):
+                    ds = ds.swap_dims({"obs": "time"})
                 glider_datasets[ds_name] = ds
+                if adcp:
+                    ds = add_adcp_data(ds)
                 print(f"Writing {dataset_nc}")
                 ds.to_netcdf(dataset_nc)
         else:
@@ -104,6 +109,10 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                 continue
             if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
                 ds = ds.drop_dims("timeseries")
+            if "obs" in list(ds.dims):
+                ds = ds.swap_dims({"obs": "time"})
+            if adcp:
+                ds = add_adcp_data(ds)
             glider_datasets[ds_name] = ds
     return glider_datasets
 
@@ -256,4 +265,39 @@ def add_profile_time(ds):
     profile_time_var.name="profile_mean_time"
     ds["profile_mean_time"] = profile_time_var
     ds = ds.drop_dims("timeseries")
+    return ds
+
+
+def add_adcp_data(ds):
+    dataset_id = ds.attrs["dataset_id"]
+    parts = dataset_id.split("_")
+    adcp_id = f"adcp_{parts[1]}_{parts[2]}"
+    cache_dir = pathlib.Path('voto_erddap_data_cache')
+    if not cache_dir.exists():
+        print(f"creating directory to cache datasets at {cache_dir.absolute()}")
+        pathlib.Path('voto_erddap_data_cache').mkdir(parents=True, exist_ok=True)
+    dataset_nc = cache_dir / f"{adcp_id}.nc"
+    if dataset_nc.exists():
+        print(f"Found {dataset_nc}. Loading from disk")
+        adcp = xr.open_dataset(dataset_nc)
+    else:
+        print(f"Downloading {adcp_id}")
+        e = ERDDAP(server="https://erddap.observations.voiceoftheocean.org/erddap/", protocol="griddap",)
+        e.dataset_id = adcp_id
+        e.griddap_initialize()
+        time = pd.read_csv(f"https://erddap.observations.voiceoftheocean.org/erddap/griddap/{adcp_id}.csvp?time")["time (UTC)"].values
+        e.constraints['time>='] = str(time[0])
+        adcp = e.to_xarray()
+        adcp.to_netcdf(dataset_nc)
+    if "obs" in list(ds.dims):
+        ds = ds.swap_dims({"obs": "time"})
+
+    if parts[0] == "nrt":
+        print("WARNING: matching adcp data to nearest nrt timestamp. Potential missmatch of ~ 15 seconds. "
+                "Use delayed mode data for closer timestamp match")
+        adcp = adcp.reindex(time=ds.time, method="nearest")
+    for var_name in list(adcp):
+        ds[f"adcp_{var_name}"] = adcp[var_name]
+    adcp_attrs_dict = {i: j for i, j in adcp.attrs.items() if i not in ds.attrs}
+    ds.attrs["adcp_attributes"] = str(adcp_attrs_dict)
     return ds
