@@ -19,6 +19,14 @@ def init_erddap(protocol="tabledap"):
     return e
 
 
+def _clean_dims(ds):
+    if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
+        ds = ds.drop_dims("timeseries")
+    if "obs" in list(ds.dims):
+        ds = ds.swap_dims({"obs": "time"})
+    return ds
+
+
 def find_glider_datasets(nrt_only=True):
     """
     Find the dataset IDs of all glider datasets on the VOTO ERDDAP server
@@ -91,7 +99,7 @@ def add_profile_time(ds):
     profile_time_var.values = profile_time
     profile_time_var.name = "profile_mean_time"
     ds["profile_mean_time"] = profile_time_var
-    ds = ds.drop_dims("timeseries")
+    ds = _clean_dims(ds)
     return ds
 
 
@@ -179,8 +187,7 @@ def add_adcp_data(ds):
         adcp = e.to_xarray()
         adcp.to_netcdf(dataset_nc)
         _update_stats(adcp_id, "adcp")
-    if "obs" in list(ds.dims):
-        ds = ds.swap_dims({"obs": "time"})
+    ds = _clean_dims(ds)
 
     if parts[0] == "nrt":
         print("WARNING: matching adcp data to nearest nrt timestamp. Potential missmatch of ~ 15 seconds. "
@@ -194,8 +201,7 @@ def add_adcp_data(ds):
 
 
 def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=False, delayed_only=False,
-                            cache_datasets=True,
-                            adcp=False):
+                            cache_datasets=True, adcp=False):
     """
     Download datasets from the VOTO server using a supplied list of dataset IDs.
     dataset_ids: list of datasetIDs present on the VOTO ERDDAP
@@ -248,10 +254,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                 except:
                     print(f"No matching data for {ds_name}")
                     continue
-                if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
-                    ds = ds.drop_dims("timeseries")
-                if "obs" in list(ds.dims):
-                    ds = ds.swap_dims({"obs": "time"})
+                ds = _clean_dims(ds)
                 print(f"Writing {dataset_nc}")
                 ds.to_netcdf(dataset_nc)
                 if adcp:
@@ -266,10 +269,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
             except:
                 print(f"No matching data for {ds_name}")
                 continue
-            if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
-                ds = ds.drop_dims("timeseries")
-            if "obs" in list(ds.dims):
-                ds = ds.swap_dims({"obs": "time"})
+            ds = _clean_dims(ds)
             if adcp:
                 ds = add_adcp_data(ds)
             glider_datasets[ds_name] = ds
@@ -378,7 +378,3 @@ def nearest_argo_profile(ds_glider, lat_window=0.5, lon_window=1, time_window=np
     except:
         print("No floats found within tolerances")
         return None
-
-
-if __name__ == '__main__':
-    get_meta("adcp_SEA067_M32")
