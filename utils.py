@@ -49,26 +49,17 @@ def find_glider_datasets(nrt_only=True):
 def get_meta(dataset_id, protocol="tabledap"):
     if "adcp" in dataset_id:
         protocol = "griddap"
-    erddap_url = f"https://erddap.observations.voiceoftheocean.org/erddap/{protocol}"
     e = init_erddap(protocol=protocol)
     e.dataset_id = dataset_id
-    if protocol == "tabledap":
-        dataset_url = f"{erddap_url}/{dataset_id}"
-        time_url = f"{dataset_url}.csvp?time"
-        time_arr = pd.read_csv(time_url).values
-        late_time = time_arr[-50][0]
-        e.constraints = {"time>=": str(late_time)}
-    else:
-        e.griddap_initialize()
-        time = pd.read_csv(f"https://erddap.observations.voiceoftheocean.org/erddap/griddap/{dataset_id}.csvp?time")[
-            "time (UTC)"].values
-        e.constraints['time>='] = str(time[-20])
-    ds = e.to_xarray()
-    attrs = ds.attrs
+    meta = e.to_ncCF()
+    attrs = {}
+    for key_name in dir(meta):
+        if key_name[0] != "_":
+            attrs[key_name] = meta.__getattribute__(key_name)
     # Clean up formatting of variables list
     if "variables" in attrs.keys():
-        if "\n" in attrs["variables"]:
-            attrs["variables"] = attrs["variables"].split("\n")
+        if type(attrs["variables"]) is dict:
+            attrs["variables"] = list(attrs["variables"].keys())
     # evaluate dictionaries
     for key, val in attrs.items():
         if type(val) == str:
