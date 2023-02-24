@@ -46,9 +46,31 @@ def find_glider_datasets(nrt_only=True):
     return datasets.values
 
 
+def _get_meta_griddap(dataset_id):
+    e = init_erddap(protocol="griddap")
+    e.dataset_id = dataset_id
+    e.griddap_initialize()
+    time = pd.read_csv(f"https://erddap.observations.voiceoftheocean.org/erddap/griddap/{dataset_id}.csvp?time")[
+        "time (UTC)"].values
+    e.constraints['time>='] = str(time[-20])
+    ds = e.to_xarray()
+    attrs = ds.attrs
+    # Clean up formatting of variables list
+    if "variables" in attrs.keys():
+        if "\n" in attrs["variables"]:
+            attrs["variables"] = attrs["variables"].split("\n")
+    # evaluate dictionaries
+    for key, val in attrs.items():
+        if type(val) == str:
+            if "{" in val:
+                attrs[key] = eval(val)
+    return attrs
+
+
 def get_meta(dataset_id, protocol="tabledap"):
-    if "adcp" in dataset_id:
-        protocol = "griddap"
+    if "adcp" in dataset_id or protocol=="griddap":
+        # Cannot use to_ncCF with griddap
+        return _get_meta_griddap(dataset_id)
     e = init_erddap(protocol=protocol)
     e.dataset_id = dataset_id
     meta = e.to_ncCF()
