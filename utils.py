@@ -211,7 +211,7 @@ def add_adcp_data(ds):
               "Use delayed mode data for closer timestamp match")
         adcp = adcp.reindex(time=ds.time, method="nearest")
     for var_name in list(adcp):
-        ds[f"adcp_{var_name}"] = adcp[var_name]
+        ds[{var_name}] = adcp[var_name]
     adcp_attrs_dict = {i: j for i, j in adcp.attrs.items() if i not in ds.attrs}
     ds.attrs["adcp_attributes"] = str(adcp_attrs_dict)
     return ds
