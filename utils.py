@@ -190,6 +190,10 @@ def add_adcp_data(ds):
         print(f"Found {dataset_nc}. Loading from disk")
         adcp = xr.open_dataset(dataset_nc)
     else:
+        dataset_ids = find_glider_datasets(nrt_only=False)
+        if adcp_id not in dataset_ids:
+            print(f"Requested ADCP dataset {adcp_id} does not exist on server! Returning standard dataset")
+            return ds
         print(f"Downloading {adcp_id}")
         e = ERDDAP(server="https://erddap.observations.voiceoftheocean.org/erddap/", protocol="griddap", )
         e.dataset_id = adcp_id
