@@ -64,6 +64,8 @@ def _get_meta_griddap(dataset_id):
         if type(val) == str:
             if "{" in val:
                 attrs[key] = eval(val)
+    if "basin" not in attrs.keys():
+        attrs["basin"] = ""
     return attrs
 
 
@@ -87,6 +89,8 @@ def get_meta(dataset_id, protocol="tabledap"):
         if type(val) == str:
             if "{" in val:
                 attrs[key] = eval(val)
+    if "basin" not in attrs.keys():
+        attrs["basin"] = ""
     return attrs
 
 
@@ -269,7 +273,8 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                 try:
                     ds = e.to_xarray()
                 except:
-                    print(f"No matching data for {ds_name}")
+                    print(f"Download of {ds_name} failed.\n Try checking the erddap page for this dataset at "
+                          f"{request}.")
                     continue
                 ds = _clean_dims(ds)
                 print(f"Writing {dataset_nc}")
