@@ -2,7 +2,6 @@ name: erddapdemo
 channels:
   - conda-forge
 dependencies:
-    - argopy
     - jupyterlab
     - matplotlib
     - xarray
@@ -11,3 +10,4 @@ dependencies:
     - jupyterlab_widgets
     - ipywidgets
     - tqdm
+    - erddapy<2.0.0
