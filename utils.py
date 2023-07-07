@@ -206,6 +206,7 @@ def add_adcp_data(ds):
             "time (UTC)"].values
         e.constraints['time>='] = str(time[0])
         adcp = e.to_xarray()
+        adcp = adcp.sortby("time")
         adcp.to_netcdf(dataset_nc)
         _update_stats(adcp_id, "adcp")
     ds = _clean_dims(ds)
@@ -278,6 +279,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                     continue
                 ds = _clean_dims(ds)
                 print(f"Writing {dataset_nc}")
+                ds = ds.sortby("time")
                 ds.to_netcdf(dataset_nc)
                 if adcp:
                     ds = add_adcp_data(ds)
@@ -294,6 +296,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
             ds = _clean_dims(ds)
             if adcp:
                 ds = add_adcp_data(ds)
+            ds = ds.sortby("time")
             glider_datasets[ds_name] = ds
     return glider_datasets
 
