@@ -102,7 +102,7 @@ def _to_xarray(
 
 def to_xarray(
         self,
-        requests_kwargs: Optional[Dict] = None,
+        requests_kwargs={"timeout": 60},
         **kw,
 ) -> "xr.Dataset":
     """Load the data request into a xarray.Dataset.
