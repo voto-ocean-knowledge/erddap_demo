@@ -376,35 +376,38 @@ def nearest_smhi_station(df, ds_glider, lat_window=0.5, lon_window=1, time_windo
         return None
 
 
-def nearest_argo_profile(ds_glider, lat_window=0.5, lon_window=1, time_window=np.timedelta64(7, "D")):
+def nearest_argo_profile(ds_glider, lat_window=0.5, lon_window=1, time_window = np.timedelta64(7, "D")):
     """
     Finds the nearest argo profile to a supplied glidermission. Uses ifremer ERDDAP
     """
     mean_lon = ds_glider.longitude.mean().values
     mean_lat = ds_glider.latitude.mean().values
     mean_time = ds_glider.time.mean().values
-    max_pressure = ds_glider.pressure.values.max()
-    min_time = str(mean_time - time_window)[:10]
-    max_time = str(mean_time + time_window)[:10]
-    search_region = [mean_lon - lon_window, mean_lon + lon_window,
-                     mean_lat - lat_window, mean_lat + lat_window,
-                     0, max_pressure,
-                     min_time, max_time]
+    max_pressure = ds_glider.pressure.max()
+    min_time = str(mean_time-time_window)[:10]
+    max_time = str(mean_time+time_window)[:10]
+    if not max_pressure:
+        print("No valid max pressure")
+        return None
+    search_region = [mean_lon-lon_window, mean_lon+lon_window, 
+                 mean_lat-lat_window, mean_lat+lat_window,
+                 0, int(max_pressure),
+                 min_time, max_time]
     try:
         ds = ArgoDataFetcher(src='erddap').region(search_region).to_xarray()
-        ds2 = ds.argo.point2profile()
-        closest_time_index = np.abs(ds2.TIME.values - mean_time).argmin()
-        profile = ds2.isel({"N_PROF": closest_time_index})
-        deg_n = profile.LATITUDE.values - np.nanmean(ds_glider.latitude)
-        deg_e = profile.LONGITUDE.values - np.nanmean(ds_glider.longitude)
-        ns_ahead = profile.TIME.values - ds_glider.time.mean()
-        east_diff, north_diff, time_diff = format_difference(deg_e, deg_n, ns_ahead)
-        loc_str = f"Nearest float is {east_diff}, {north_diff} & {time_diff} than mean of glider data"
-        print(loc_str)
-        return profile
-    except:
-        print("No floats found within tolerances")
+    except FileNotFoundError:
+        print("no argo floats in region")
         return None
+    ds2 = ds.argo.point2profile()
+    closest_time_index = np.abs(ds2.TIME.values-mean_time).argmin()
+    profile = ds2.isel({"N_PROF":closest_time_index})
+    deg_n = profile.LATITUDE.values - np.nanmean(ds_glider.latitude)
+    deg_e = profile.LONGITUDE.values - np.nanmean(ds_glider.longitude)
+    ns_ahead = profile.TIME.values - ds_glider.time.mean()
+    east_diff, north_diff, time_diff = format_difference(deg_e, deg_n, ns_ahead)
+    loc_str = f"Nearest float is {east_diff}, {north_diff} & {time_diff} than mean of glider data"
+    print(loc_str)
+    return profile
 
 
 def comp_plot(glider, ctd):
