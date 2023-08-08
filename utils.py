@@ -8,6 +8,124 @@ from pathlib import Path
 from erddapy import ERDDAP
 from tqdm.notebook import tqdm
 from argopy import DataFetcher as ArgoDataFetcher
+from typing import Dict, Optional, BinaryIO, Generator
+import functools
+import httpx
+import io
+import platform
+from contextlib import contextmanager
+from urllib.parse import urlparse
+@functools.lru_cache(maxsize=128)
+def _urlopen(url: str, auth: Optional[tuple] = None, **kwargs: Dict) -> BinaryIO:
+    response = httpx.get(url, follow_redirects=True, auth=auth, **kwargs)
+    try:
+        response.raise_for_status()
+    except httpx.HTTPError as err:
+        raise httpx.HTTPError(f"{response.content.decode()}") from err
+    return io.BytesIO(response.content)
+
+@contextmanager
+def _tempnc(data: BinaryIO) -> Generator[str, None, None]:
+    """Create a temporary netcdf file."""
+    from tempfile import NamedTemporaryFile
+
+    # Let windows handle the file cleanup to avoid its aggressive file lock.
+    delete = True
+    if platform.system().lower() == "windows":
+        delete = False
+
+    tmp = None
+    try:
+        tmp = NamedTemporaryFile(suffix=".nc", prefix="erddapy_", delete=delete)
+        tmp.write(data.read())
+        tmp.flush()
+        yield tmp.name
+    finally:
+        if tmp is not None:
+            tmp.close()
+
+def urlopen(
+    url: str,
+    requests_kwargs: Optional[Dict] = None,
+) -> BinaryIO:
+    """Thin wrapper around httpx get content.
+
+    See httpx.get docs for the `params` and `kwargs` options.
+
+    """
+    # Ignoring type checks here b/c mypy does not support decorated functions.
+    if requests_kwargs is None:
+        requests_kwargs = {}
+    data = _urlopen(url, **requests_kwargs)  # type: ignore
+    data.seek(0)
+    return data
+
+def _nc_dataset(url, requests_kwargs: Optional[Dict] = None):
+    """Return a netCDF4-python Dataset from memory and fallbacks to disk if that fails."""
+    from netCDF4 import Dataset
+
+    data = urlopen(url, requests_kwargs)
+    try:
+        return Dataset(Path(urlparse(url).path).name, memory=data.read())
+    except OSError:
+        # if libnetcdf is not compiled with in-memory support fallback to a local tmp file
+        data.seek(0)
+        with _tempnc(data) as _nc:
+            return Dataset(_nc)
+        
+        
+def _to_xarray(
+    url: str,
+    response="opendap",
+    requests_kwargs: Optional[Dict] = None,
+    xarray_kwargs: Optional[Dict] = None,
+) -> "xr.Dataset":
+    """
+    Convert a URL to an xarray dataset.
+
+    url: URL to request data from.
+    response: type of response to be requested from the server.
+    requests_kwargs: arguments to be passed to urlopen method.
+    xarray_kwargs: kwargs to be passed to third-party library (xarray).
+    """
+    import xarray as xr
+
+    if response == "opendap":
+        return xr.open_dataset(url, **(xarray_kwargs or {}))
+    else:
+        nc = _nc_dataset(url, requests_kwargs)
+        return xr.open_dataset(
+            xr.backends.NetCDF4DataStore(nc),
+            **(xarray_kwargs or {}),
+        )
+
+
+def to_xarray(
+        self,
+        requests_kwargs: Optional[Dict] = None,
+        **kw,
+) -> "xr.Dataset":
+    """Load the data request into a xarray.Dataset.
+
+    Accepts any `xr.open_dataset` keyword arguments.
+    """
+    if self.response == "opendap":
+        response = "opendap"
+    elif self.protocol == "griddap":
+        response = "nc"
+    else:
+        response = "ncCF"
+    distinct = kw.pop("distinct", False)
+    url = self.get_download_url(response=response, distinct=distinct)
+    if requests_kwargs:
+        requests_kwargs = {"auth": self.auth} | requests_kwargs
+    else:
+        requests_kwargs = {"auth": self.auth}
+    return _to_xarray(url, response, requests_kwargs, xarray_kwargs=dict(**kw))
+
+
+ERDDAP.to_xarray = to_xarray
+
 
 cache_dir = pathlib.Path('voto_erddap_data_cache')
 
@@ -274,7 +392,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
             else:
                 print(f"Downloading {ds_name}")
                 try:
-                    ds = e.to_xarray()
+                    ds = e.to_xarray(requests_kwargs={"timeout": 60})
                 except:
                     print(f"Download of {ds_name} failed.\n Try checking the erddap page for this dataset at "
                           f"{request}.")
@@ -291,7 +409,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
             print(f"Downloading {ds_name}")
             e.dataset_id = ds_name
             try:
-                ds = e.to_xarray()
+                ds = e.to_xarray(requests_kwargs={"timeout": 60})
             except:
                 print(f"No matching data for {ds_name}")
                 continue
