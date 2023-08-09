@@ -437,6 +437,7 @@ def comp_plot(glider, ctd):
         ax[i].set(xlabel=variable, xlim=(vmin, vmax))
     ax[0].legend()
     ax[0].invert_yaxis()
+    ax[0].set(ylabel="Pressure (dbar)")
     ax[1].set(title=f"Separation: {distance} km, {dtime} hours")
     ax[2].invert_yaxis()
     ax[2].set(ylabel="Pressure (dbar)")
@@ -447,7 +448,7 @@ def nearby_ctd(ds_glider, comparison_plots=False):
     e = init_erddap()
     e.dataset_id = "ctd_deployment"
     df_ctd = e.to_xarray().to_pandas()
-    name = f'SEA0{ds_glider.attrs["deployment_id"]}_M{ds_glider.attrs["glider_serial"]}'
+    name = f'SEA0{ds_glider.attrs["glider_serial"]}_M{ds_glider.attrs["deployment_id"]}'
     df_glider = ds_glider.to_pandas()
     df_glider["time"] = df_glider.index
 
