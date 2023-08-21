@@ -446,7 +446,7 @@ def comp_plot(glider, ctd):
 def nearby_ctd(ds_glider, comparison_plots=False):
     e = init_erddap()
     e.dataset_id = "ctd_deployment"
-    df_ctd = e.to_xarray().to_pandas()
+    df_ctd = e.to_xarray().drop_dims("timeseries").to_pandas()
     name = f'SEA0{ds_glider.attrs["deployment_id"]}_M{ds_glider.attrs["glider_serial"]}'
     df_glider = ds_glider.to_pandas()
     df_glider["time"] = df_glider.index
