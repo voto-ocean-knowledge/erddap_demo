@@ -2,6 +2,8 @@
 
 Demonstration of ERDDAP and erddapy initially presented in Gothenburg 2023-01-29.
 
+If you don't have conda/Python on your computer, I recommend using [miniforge](https://github.com/conda-forge/miniforge)
+
 To run the notebooks:
 1. download this repo (green button in the top right)
 2. create the environment with conda using the environment.yml file
