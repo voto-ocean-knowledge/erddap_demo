@@ -10,4 +10,5 @@ dependencies:
     - jupyterlab_widgets
     - ipywidgets
     - tqdm
-    - erddapy<2.0.0
+    - erddapy
+    - argopy
