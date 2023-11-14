@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from erddapy import ERDDAP
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from argopy import DataFetcher as ArgoDataFetcher
 
 cache_dir = pathlib.Path('voto_erddap_data_cache')
