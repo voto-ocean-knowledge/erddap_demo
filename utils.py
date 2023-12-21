@@ -411,7 +411,7 @@ def nearest_argo_profile(ds_glider, lat_window=0.5, lon_window=1, time_window = 
 
 def comp_plot(glider, ctd):
     df_max = glider.groupby("dive_num").max()
-    pressure_target = ctd.pressure.max() * 0.9
+    pressure_target = np.nanpercentile(ctd.pressure.values, 50)
     first_deep_dive = df_max[df_max.pressure > pressure_target].index.values[0]
     glider_start = glider[glider.dive_num == first_deep_dive]
     df_max = glider_start.groupby("dive_num").max()
@@ -443,42 +443,45 @@ def comp_plot(glider, ctd):
     ax[2].set(ylabel="Pressure (dbar)")
     return fig, ax
 
+e = init_erddap()
+e.dataset_id = "ctd_deployment"
+df_ctd = e.to_xarray().drop_dims("timeseries").to_pandas()
+#df_ctd = e.to_pandas()
+df_ctd.index = df_ctd["time"]
+df_ctd = df_ctd.sort_index()
 
-def nearby_ctd(ds_glider, comparison_plots=False):
-    e = init_erddap()
-    e.dataset_id = "ctd_deployment"
-    df_ctd = e.to_xarray().drop_dims("timeseries").to_pandas()
+def nearby_ctd(ds_glider, comparison_plots=False, max_dist = 0.5, max_days = 2):
+
     name = f'SEA0{ds_glider.attrs["glider_serial"]}_M{ds_glider.attrs["deployment_id"]}'
     df_glider = ds_glider.to_pandas()
     df_glider["time"] = df_glider.index
 
-    start = df_glider.time.min()
-    end = df_glider.time.max()
+    start = np.nanpercentile(df_glider.time.values, 1)
+    end = np.nanpercentile(df_glider.time.values, 99)
 
     # Look for nearby CTDs at start and end of deployment
     dives = list(set(df_glider.dive_num))
     dives.sort()
     ind_start = 1
-    ind_end = min(3, len(dives) - 1)
+    ind_end = min(5, len(dives) - 1)
     glider_start = df_glider[np.logical_and(df_glider.dive_num > dives[ind_start], df_glider.dive_num < dives[ind_end])]
     glider_end = df_glider[np.logical_and(df_glider.dive_num > dives[-ind_end], df_glider.dive_num < dives[-ind_start])]
 
     lon_start = glider_start.longitude.mean()
     lat_start = glider_start.latitude.mean()
     df_near_start = df_ctd[
-        np.logical_and(abs(df_ctd.longitude - lon_start) < 0.1, abs(df_ctd.latitude - lat_start) < 0.1)]
-    df_start = df_near_start[abs(df_near_start.time - start) < datetime.timedelta(days=1)]
+        np.logical_and(abs(df_ctd.longitude - lon_start) < max_dist, abs(df_ctd.latitude - lat_start) < max_dist)]
+    df_start = df_near_start[abs(df_near_start.time - start) < datetime.timedelta(days=max_days)]
 
     lon_end = glider_end.longitude.mean()
     lat_end = glider_end.latitude.mean()
-    df_near_end = df_ctd[np.logical_and(abs(df_ctd.longitude - lon_end) < 0.1, abs(df_ctd.latitude - lat_end) < 0.1)]
-    df_end = df_near_end[abs(df_near_end.time - end) < datetime.timedelta(hours=12)]
+    df_near_end = df_ctd[np.logical_and(abs(df_ctd.longitude - lon_end) < max_dist, abs(df_ctd.latitude - lat_end) < max_dist)]
+    df_end = df_near_end[abs(df_near_end.time - end) < datetime.timedelta(days=max_days)]
 
     ctds = {}
     if not Path("figs").is_dir():
         Path("figs").mkdir()
     if not df_start.isnull().all().all():
-        print("found deployment ctd cast")
         ctds["deployment"] = df_start
         if comparison_plots:
             fig, ax = comp_plot(glider_start, df_start)
@@ -486,13 +489,10 @@ def nearby_ctd(ds_glider, comparison_plots=False):
             fig.savefig(f"figs/{name}_deployment.png")
 
     if not df_end.isnull().all().all():
-        print("found recovery ctd cast")
         ctds["recovery"] = df_end
         if comparison_plots:
             fig, ax = comp_plot(glider_end, df_end)
             ax[0].set(title=f"{name} recovery")
             fig.savefig(f"figs/{name}_recovery.png")
 
-    if not ctds:
-        print("No ctds found")
     return ctds
