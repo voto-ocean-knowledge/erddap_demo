@@ -22,9 +22,9 @@ def init_erddap(protocol="tabledap"):
 
 
 def _clean_dims(ds):
-    if "timeseries" in ds.dims.keys() and "obs" in ds.dims.keys():
+    if "timeseries" in ds.sizes.keys() and "obs" in ds.sizes.keys():
         ds = ds.drop_dims("timeseries")
-    if "obs" in list(ds.dims):
+    if "obs" in ds.sizes.keys():
         ds = ds.swap_dims({"obs": "time"})
     return ds
 
@@ -224,6 +224,24 @@ def add_adcp_data(ds):
     return ds
 
 
+def encode_times(ds):
+    sec_string = 'seconds'
+    if 'ns' in str(ds['time'].dtype):
+        sec_string = 'nanoseconds'
+    if 'units' in ds.time.encoding.keys():
+        ds.time.encoding.pop('units')
+    if 'calendar' in ds.time.encoding.keys():
+        ds.time.encoding.pop('calendar')
+    ds["time"].encoding["units"] = f'{sec_string} since 1970-01-01T00:00:00Z'
+    for var_name in list(ds):
+        if "time" in var_name.lower() and not var_name == "time":
+            for drop_attr in ['units', 'calendar', 'dtype']:
+                if drop_attr in ds[var_name].encoding.keys():
+                    ds[var_name].encoding.pop(drop_attr)
+            ds[var_name].encoding = ds["time"].encoding
+    return ds
+
+
 def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=False, delayed_only=False,
                             cache_datasets=True, adcp=False):
     """
@@ -279,6 +297,7 @@ def download_glider_dataset(dataset_ids, variables=(), constraints={}, nrt_only=
                     print(ex)
                     continue
                 ds = _clean_dims(ds)
+                ds = encode_times(ds)
                 print(f"Writing {dataset_nc}")
                 ds = ds.sortby("time")
                 ds.to_netcdf(dataset_nc)
@@ -443,14 +462,13 @@ def comp_plot(glider, ctd):
     ax[2].set(ylabel="Pressure (dbar)")
     return fig, ax
 
-e = init_erddap()
-e.dataset_id = "ctd_deployment"
-df_ctd = e.to_xarray().drop_dims("timeseries").to_pandas()
-#df_ctd = e.to_pandas()
-df_ctd.index = df_ctd["time"]
-df_ctd = df_ctd.sort_index()
 
 def nearby_ctd(ds_glider, comparison_plots=False, max_dist = 0.5, max_days = 2):
+    e = init_erddap()
+    e.dataset_id = "ctd_deployment"
+    df_ctd = e.to_xarray().drop_dims("timeseries").to_pandas()
+    df_ctd.index = df_ctd["time"]
+    df_ctd = df_ctd.sort_index()
 
     name = f'SEA0{ds_glider.attrs["glider_serial"]}_M{ds_glider.attrs["deployment_id"]}'
     df_glider = ds_glider.to_pandas()
